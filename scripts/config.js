@@ -9,15 +9,26 @@ let rtdb;
 
 export function initializeFirebase() {
   if (admin.apps.length === 0) {
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+    const rawPrivateKey = process.env.FIREBASE_PRIVATE_KEY;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const projectId = process.env.FIREBASE_PROJECT_ID || 'robostemdb';
+
+    if (!rawPrivateKey || !clientEmail) {
+      console.error('Missing Firebase credentials!');
+      if (!rawPrivateKey) console.error('- FIREBASE_PRIVATE_KEY is missing');
+      if (!clientEmail) console.error('- FIREBASE_CLIENT_EMAIL is missing');
+      throw new Error('Firebase credentials (private key or client email) are missing from environment variables.');
+    }
+
+    const privateKey = rawPrivateKey.replace(/\\n/g, '\n');
     
     admin.initializeApp({
       credential: admin.credential.cert({
-        projectId: process.env.FIREBASE_PROJECT_ID || 'robostemdb',
+        projectId: projectId,
         privateKey: privateKey,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        clientEmail: clientEmail,
       }),
-      databaseURL: `https://${process.env.FIREBASE_PROJECT_ID || 'robostemdb'}-default-rtdb.firebaseio.com`,
+      databaseURL: `https://${projectId}-default-rtdb.firebaseio.com`,
     });
   }
 
