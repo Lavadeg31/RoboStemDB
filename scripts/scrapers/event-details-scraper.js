@@ -1,6 +1,6 @@
 import axios from 'axios';
-import { ROBOTEVENTS_API_BASE, getApiKeys, getNextApiKey } from '../config.js';
-import { handleRateLimit } from '../utils/rate-limiter.js';
+import { ROBOTEVENTS_API_BASE, getApiKeys } from '../config.js';
+import { handleRateLimit, getNextApiKey } from '../utils/rate-limiter.js';
 
 /**
  * Scrape event details including divisions
