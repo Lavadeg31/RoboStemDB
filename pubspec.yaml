@@ -1,0 +1,88 @@
+name: stat_iq
+description: "statIQ - A modern Flutter app for VEX IQ MS and ES teams"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.3 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  
+  # HTTP and API
+  http: ^1.1.0
+  dio: ^5.3.2
+  
+  # State Management
+  provider: ^6.1.1
+  riverpod: ^2.4.9
+  flutter_riverpod: ^2.4.9
+  
+  # UI Components
+  flutter_staggered_grid_view: ^0.7.0
+  cached_network_image: ^3.3.0
+  shimmer: ^3.0.0
+  pull_to_refresh: ^2.0.0
+  
+  # Data and Storage
+  shared_preferences: ^2.2.2
+  sqflite: ^2.3.0
+  path: ^1.8.3
+  
+  # Date and Time
+  intl: ^0.18.1
+  
+  # JSON and Serialization
+  json_annotation: ^4.8.1
+  
+  # Utilities
+  url_launcher: ^6.2.1
+  path_provider: ^2.1.1
+  permission_handler: ^11.0.1
+  device_info_plus: ^9.1.1
+  share_plus: ^7.2.1
+  logger: ^2.0.0+1
+  
+  # Notifications
+  flutter_local_notifications: ^17.0.0
+  timezone: ^0.9.2
+  
+  # Color Picker
+  flutter_colorpicker: ^1.0.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  build_runner: ^2.4.7
+  json_serializable: ^6.7.1
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/images/ 
+    - assets/special_teams.json 
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/app_icon.png"
+  remove_alpha_ios: true  # Remove alpha channel for App Store compliance
+  min_sdk_android: 21 # android min sdk min:16, default 21
+  web:
+    generate: true
+    image_path: "assets/images/app_icon.png"
+    background_color: "#hexcode"
+    theme_color: "#hexcode"
+  windows:
+    generate: true
+    image_path: "assets/images/app_icon.png"
+    icon_size: 48 # min:48, max:256, default: 48
+  macos:
+    generate: true
+    image_path: "assets/images/app_icon.png" 

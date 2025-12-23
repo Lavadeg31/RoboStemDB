@@ -1,0 +1,52 @@
+name: Sync RobotEvents to Firebase
+
+on:
+  workflow_dispatch:
+    inputs:
+      season_id:
+        description: 'Season ID to sync (leave empty to use TARGET_SEASON_ID from env)'
+        required: false
+        type: string
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run sync script
+        env:
+          ROBOTEVENTS_API_KEYS: ${{ secrets.ROBOTEVENTS_API_KEYS }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          TARGET_SEASON_ID: ${{ github.event.inputs.season_id || secrets.TARGET_SEASON_ID }}
+        run: npm run sync
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'RobotEvents Sync Failed',
+              body: 'The RobotEvents sync workflow failed. Check the workflow logs for details.',
+              labels: ['bug', 'sync']
+            })
+
