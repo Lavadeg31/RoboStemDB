@@ -32,7 +32,8 @@ export function initializeFirebase() {
     });
   }
 
-  db = admin.firestore();
+  // Use the 'default' database ID if (default) doesn't exist
+  db = admin.firestore('default');
   rtdb = admin.database();
   
   return { db, rtdb };
