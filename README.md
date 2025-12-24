@@ -22,16 +22,9 @@ The system is split into three specialized workflows to optimize performance and
     *   **Data**: Comprehensive sync of all data points (details, divisions, teams, rankings, finalist rankings, matches, skills).
     *   **Goal**: Ensures data integrity and repairs any missing or outdated information.
 
-4.  **WEEKLY Master Team Sync (Every Sunday)**:
-    *   **Source**: Private GitHub repository `Lavadeg31/TeamList`.
-    *   **Data**: Imports the `master_team_list.json` containing details for ~27,000+ teams.
-    *   **Storage**: Pushes to the `master_teams` collection in Firestore.
-    *   **Goal**: Provides a global lookup for team details (name, organization, location, grade) without needing to scrape them individually.
-
 ## Project Structure
 
 *   `scripts/sync.js`: The main orchestrator (supports `--live`, `--new`, `--full` modes).
-*   `scripts/sync-teams.js`: Specialized script for importing the Master Team List.
 *   `scripts/scrapers/`: Individual modules for different API endpoints.
 *   `scripts/utils/api-client.js`: Centralized API client with rotation and rate-limit handling.
 *   `scripts/utils/firebase-helpers.js`: Optimized database write operations.
