@@ -1,35 +1,13 @@
-import axios from 'axios';
-import { ROBOTEVENTS_API_BASE, getApiKeys } from '../config.js';
-import { handleRateLimit, getNextApiKey } from '../utils/rate-limiter.js';
+import { ROBOTEVENTS_API_BASE } from '../config.js';
+import { apiGet } from '../utils/api-client.js';
 
 /**
  * Scrape event details including divisions
  */
 export async function scrapeEventDetails(eventId) {
-  const apiKeys = getApiKeys();
-  const apiKey = getNextApiKey(apiKeys);
-  
   const endpoint = `${ROBOTEVENTS_API_BASE}/events/${eventId}`;
-  
-  let retryCount = 0;
-  while (true) {
-    try {
-      const response = await axios.get(endpoint, {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Accept': 'application/json',
-        },
-      });
-      return response.data;
-    } catch (error) {
-      const shouldRetry = await handleRateLimit(error, retryCount);
-      if (shouldRetry) {
-        retryCount++;
-        continue;
-      }
-      throw error;
-    }
-  }
+  const response = await apiGet(endpoint);
+  return response.data;
 }
 
 /**
@@ -46,4 +24,3 @@ export function extractDivisions(eventDetails) {
     order: div.order,
   }));
 }
-
