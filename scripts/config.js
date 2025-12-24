@@ -13,6 +13,8 @@ export function initializeFirebase() {
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
     const projectId = process.env.FIREBASE_PROJECT_ID || 'robostemdb';
 
+    console.log(`📡 Initializing Firebase App for project: ${projectId}...`);
+
     if (!rawPrivateKey || !clientEmail) {
       console.error('Missing Firebase credentials!');
       if (!rawPrivateKey) console.error('- FIREBASE_PRIVATE_KEY is missing');
@@ -29,12 +31,12 @@ export function initializeFirebase() {
         clientEmail: clientEmail,
       }),
     });
+    console.log('✅ Firebase App initialized successfully');
   }
 
   // In firebase-admin v12, we use getFirestore
-  // We first try the default primary database initialization
-  // If your database ID is truly 'default' (not the primary), this can be adjusted.
-  db = getAdminFirestore();
+  // We are explicitly using 'default' based on the project configuration
+  db = getAdminFirestore('default');
   
   return { db };
 }

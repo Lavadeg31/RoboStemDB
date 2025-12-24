@@ -21,22 +21,27 @@ async function main() {
 
   // Test Database Connection immediately
   try {
-    console.log(`🔍 Testing database connection (Project: ${process.env.FIREBASE_PROJECT_ID || 'robostemdb'})...`);
+    const projectId = process.env.FIREBASE_PROJECT_ID || 'robostemdb';
+    console.log(`🔍 Testing database connection (Project: ${projectId}, Database: default)...`);
     
     // Create a timeout for the heartbeat check
     const heartbeatTimeout = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Heartbeat write timed out after 20s')), 20000)
+      setTimeout(() => reject(new Error('Heartbeat write timed out after 30s')), 30000)
     );
 
     const heartbeatWrite = db.collection('sync').doc('heartbeat').set({ 
-      lastCheck: new Date().toISOString() 
+      lastCheck: new Date().toISOString(),
+      status: 'online'
     }, { merge: true });
 
     await Promise.race([heartbeatWrite, heartbeatTimeout]);
     console.log('✅ Database connection successful');
   } catch (e) {
     console.error('❌ Database connection failed:', e.message);
-    console.log('💡 Troubleshooting: Check if FIREBASE_PROJECT_ID is correct and Firestore is enabled in the console.');
+    console.log('💡 Troubleshooting:');
+    console.log('  1. Check if the database ID "default" exists in the Firebase Console.');
+    console.log('  2. Verify that your FIREBASE_PRIVATE_KEY and CLIENT_EMAIL are correct.');
+    console.log('  3. Ensure Firestore is in "Native Mode" and not "Datastore Mode".');
     process.exit(1);
   }
 
