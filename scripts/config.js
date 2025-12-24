@@ -32,8 +32,9 @@ export function initializeFirebase() {
   }
 
   // In firebase-admin v12, we use getFirestore
-  // We explicitly target the 'default' database ID
-  db = getAdminFirestore('default');
+  // We first try the default primary database initialization
+  // If your database ID is truly 'default' (not the primary), this can be adjusted.
+  db = getAdminFirestore();
   
   return { db };
 }

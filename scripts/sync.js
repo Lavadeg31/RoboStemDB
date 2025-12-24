@@ -21,13 +21,22 @@ async function main() {
 
   // Test Database Connection immediately
   try {
-    console.log('🔍 Testing database connection...');
-    await db.collection('sync').doc('heartbeat').set({ 
+    console.log(`🔍 Testing database connection (Project: ${process.env.FIREBASE_PROJECT_ID || 'robostemdb'})...`);
+    
+    // Create a timeout for the heartbeat check
+    const heartbeatTimeout = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Heartbeat write timed out after 20s')), 20000)
+    );
+
+    const heartbeatWrite = db.collection('sync').doc('heartbeat').set({ 
       lastCheck: new Date().toISOString() 
     }, { merge: true });
+
+    await Promise.race([heartbeatWrite, heartbeatTimeout]);
     console.log('✅ Database connection successful');
   } catch (e) {
     console.error('❌ Database connection failed:', e.message);
+    console.log('💡 Troubleshooting: Check if FIREBASE_PROJECT_ID is correct and Firestore is enabled in the console.');
     process.exit(1);
   }
 
