@@ -47,10 +47,26 @@ async function main() {
       const isPastEvent = eventEndDate && (now.getTime() - eventEndDate.getTime() > 24 * 60 * 60 * 1000);
 
       if (isPastEvent) {
-        const doc = await db.collection('events').doc(eventId).get();
-        if (doc.exists) {
-          console.log(`[${i + 1}/${events.length}] Skipping past event ${eventId} (already in DB)`);
-          continue;
+        try {
+          const doc = await db.collection('events').doc(eventId).get();
+          if (doc.exists) {
+            // Check if this event was synced with the "old" 1-team-per-rank logic
+            // We check if division 1 has finalist rankings with old numeric IDs
+            const finCheck = await db.collection(`events/${eventId}/divisions/1/finalistRankings`).limit(1).get();
+            const firstFin = finCheck.docs[0];
+            
+            // If the ID is a simple number (like "1"), it's the old broken logic. 
+            // We should NOT skip so we can fix it.
+            if (firstFin && !firstFin.id.startsWith('team_')) {
+              console.log(`\n  ♻️  Re-syncing event ${eventId} to fix incomplete teamwork rankings...`);
+            } else {
+              process.stdout.write('.'); // Truly finished, safe to skip
+              if ((i + 1) % 50 === 0) console.log(` [${i + 1}/${events.length}]`); 
+              continue;
+            }
+          }
+        } catch (e) {
+          // If check fails, just proceed with sync to be safe
         }
       }
 
@@ -58,41 +74,53 @@ async function main() {
 
       try {
         // 1. Store event metadata
+        console.log(`  📝 Storing metadata...`);
         await batchWriteToFirestore('events', [{ id: eventId, data: event }]);
 
         // 2. Fetch details to get divisions
+        console.log(`  🔍 Fetching event details...`);
         const eventDetails = await scrapeEventDetails(eventId);
         const divisions = extractDivisions(eventDetails);
 
         if (divisions.length > 0) {
+          console.log(`  📂 Storing ${divisions.length} divisions...`);
           await batchWriteToFirestore(`events/${eventId}/divisions`, divisions.map(d => ({ id: String(d.id), data: d })));
         }
 
         // 3. Process each division (Rankings & Matches)
         for (const division of divisions) {
           const divId = division.id;
+          console.log(`  🔷 Division ${divId}: ${division.name}`);
           
           // Rankings
+          console.log(`    📊 Fetching rankings...`);
           const rankings = await scrapeEventRankings(eventId, divId);
           if (rankings.length > 0) {
+            console.log(`    💾 Storing ${rankings.length} rankings...`);
             await batchWriteToFirestore(`events/${eventId}/divisions/${divId}/rankings`, rankings.map(r => ({
-              id: String(r.rank || `team_${r.team?.id}`),
+              // Use official ID or team ID to ensure both teams in an alliance are saved
+              id: String(r.id || `team_${r.team?.id || r.team}`),
               data: r
             })));
           }
 
           // Finalist Rankings
+          console.log(`    📊 Fetching finalist rankings...`);
           const finalists = await scrapeEventFinalistRankings(eventId, divId);
           if (finalists.length > 0) {
+            console.log(`    💾 Storing ${finalists.length} finalist rankings...`);
             await batchWriteToFirestore(`events/${eventId}/divisions/${divId}/finalistRankings`, finalists.map(f => ({
-              id: String(f.rank || `team_${f.team?.id}`),
+              // Use official ID or team ID to ensure both teams in an alliance are saved
+              id: String(f.id || `team_${f.team?.id || f.team}`),
               data: f
             })));
           }
 
           // Matches (includes scores/results)
+          console.log(`    ⚔️  Fetching matches...`);
           const matches = await scrapeEventMatches(eventId, divId);
           if (matches.length > 0) {
+            console.log(`    💾 Storing ${matches.length} matches...`);
             await batchWriteToFirestore(`events/${eventId}/divisions/${divId}/matches`, matches.map(m => ({
               id: String(m.id || m.matchnum),
               data: m
@@ -101,14 +129,18 @@ async function main() {
         }
 
         // 4. Teams at event
+        console.log(`  👥 Fetching teams...`);
         const teams = await scrapeEventTeams(eventId);
         if (teams.length > 0) {
+          console.log(`  💾 Storing ${teams.length} teams...`);
           await batchWriteToFirestore(`events/${eventId}/teams`, teams.map(t => ({ id: String(t.id || t.number), data: t })));
         }
 
         // 5. Skills results
+        console.log(`  🏆 Fetching skills...`);
         const skills = await scrapeEventSkills(eventId);
         if (skills.length > 0) {
+          console.log(`  💾 Storing ${skills.length} skills scores...`);
           await batchWriteToFirestore(`events/${eventId}/skills`, skills.map(s => ({
             id: String(s.id || `${s.team?.id}_${s.type}`),
             data: s

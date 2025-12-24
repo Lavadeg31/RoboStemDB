@@ -47,6 +47,11 @@ export async function apiGet(endpoint, params = {}) {
     const apiKey = getNextApiKey(availableKeys);
 
     try {
+      // Detailed logging for API calls
+      const url = new URL(endpoint);
+      const paramsStr = Object.keys(params).length > 0 ? `?${new URLSearchParams(params).toString()}` : '';
+      console.log(`🌐 [API CALL] ${url.pathname}${paramsStr}`);
+
       const response = await axios.get(endpoint, {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
