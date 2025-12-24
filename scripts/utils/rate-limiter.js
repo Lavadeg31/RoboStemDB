@@ -7,8 +7,13 @@ let currentKeyIndex = 0;
 let keyLastUsed = new Map();
 
 export function getNextApiKey(apiKeys) {
-  if (apiKeys.length === 0) {
+  if (!apiKeys || apiKeys.length === 0) {
     throw new Error('No API keys available');
+  }
+
+  // If index is out of bounds (due to changing list size), reset it
+  if (currentKeyIndex >= apiKeys.length) {
+    currentKeyIndex = 0;
   }
 
   // Rotate through keys
