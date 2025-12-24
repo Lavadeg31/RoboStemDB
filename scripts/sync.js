@@ -164,8 +164,6 @@ async function main() {
           currentEvent: eventId,
         });
 
-        // Small delay to avoid overwhelming the API
-        await sleep(100);
       } catch (error) {
         console.error(`Error processing event ${eventId}:`, error.message);
         // Continue with next event

@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { getApiKeys } from '../config.js';
-import { handleRateLimit, getNextApiKey, sleep } from './rate-limiter.js';
+import { getNextApiKey, sleep } from './rate-limiter.js';
 
 const blacklistedKeys = new Set();
 const rateLimitedKeys = new Map(); // key -> cooldown expiration time
@@ -15,7 +15,7 @@ const rateLimitedKeys = new Map(); // key -> cooldown expiration time
  */
 export async function apiGet(endpoint, params = {}) {
   const allApiKeys = getApiKeys();
-  let retryCount = 0;
+  let retryCount = 0; // Number of times we've had to wait because NO keys were available
   let authRetryCount = 0;
 
   while (true) {
@@ -31,11 +31,16 @@ export async function apiGet(endpoint, params = {}) {
     
     // If NO keys are available (all dead or all cooling down), wait a bit
     if (availableKeys.length === 0) {
-      const waitTime = 5000;
-      console.log(`All API keys are either invalid or rate-limited. Waiting ${waitTime/1000}s...`);
+      // Find the key that will expire soonest to wait just long enough
+      const cooldowns = allApiKeys
+        .map(k => rateLimitedKeys.get(k))
+        .filter(c => c && c > now);
+      
+      const nextAvailableAt = cooldowns.length > 0 ? Math.min(...cooldowns) : now + 5000;
+      const waitTime = Math.max(1000, Math.min(nextAvailableAt - now, 30000)); // Wait between 1s and 30s
+      
+      console.log(`⚠️ All API keys are cooling down. Waiting ${Math.round(waitTime/1000)}s...`);
       await sleep(waitTime);
-      retryCount++;
-      if (retryCount > 10) throw new Error('RobotEvents API sync stopped: All keys are persistently rate-limited or invalid.');
       continue;
     }
 
@@ -50,26 +55,36 @@ export async function apiGet(endpoint, params = {}) {
         params: params,
         timeout: 30000, 
       });
+      
+      // Success! Add a 2-second delay to be gentle on the API
+      await sleep(2000);
+      
+      // Success! Reset retry count for this endpoint call
+      retryCount = 0;
       return response;
     } catch (error) {
       // Handle 401 Unauthorized
       if (error.response?.status === 401) {
-        console.warn(`API Key failed (401). Blacklisting key and trying next...`);
+        console.warn(`❌ API Key failed (401). Blacklisting key...`);
         blacklistedKeys.add(apiKey);
         authRetryCount++;
         if (authRetryCount > allApiKeys.length) {
-          throw new Error('Failed to find a working API key after checking all available keys.');
+          throw new Error('All provided RobotEvents API keys are failing with 401 Unauthorized.');
         }
         continue;
       }
 
       // Handle 429 Rate Limit
       if (error.response?.status === 429) {
-        const cooldownTime = Math.pow(2, retryCount) * 2000; // 2s, 4s, 8s...
-        console.warn(`API Key rate limited (429). Putting key on ${cooldownTime/1000}s cooldown and rotating...`);
-        rateLimitedKeys.set(apiKey, now + cooldownTime);
-        retryCount++;
-        continue; // Try again immediately with a different key
+        // Put THIS specific key on a 60-second cooldown
+        console.warn(`⏳ API Key rate limited (429). Rotating to another key...`);
+        rateLimitedKeys.set(apiKey, now + 60000); // Fixed 60s cooldown for the specific key
+        
+        // If we have very few keys, don't spin too fast
+        if (availableKeys.length <= 1) {
+            await sleep(2000); 
+        }
+        continue; 
       }
 
       // Re-throw other errors
