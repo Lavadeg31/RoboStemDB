@@ -14,7 +14,7 @@ export async function batchWriteToFirestore(collectionPath, documents, merge = t
   let currentBatch = db.batch();
   let count = 0;
 
-  console.log(`    💾 [DB WRITE] Initializing batch write for ${documents.length} docs to "${collectionPath}"...`);
+  console.log(`    💾 [DB WRITE] Building batch for ${documents.length} docs...`);
 
   for (const doc of documents) {
     const { id, data } = doc;
@@ -38,15 +38,29 @@ export async function batchWriteToFirestore(collectionPath, documents, merge = t
     batches.push(currentBatch);
   }
 
+  console.log(`    💾 [DB WRITE] Executing commit for ${batches.length} batch(es)...`);
+
   // Execute all batches
   for (let i = 0; i < batches.length; i++) {
-    await batches[i].commit();
-    if (batches.length > 1) {
-      console.log(`    ✅ [DB WRITE] Committed batch ${i + 1}/${batches.length}`);
+    try {
+      // 10 second timeout - let's fail fast if there's an issue
+      const timeout = 10000;
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error(`Firestore commit timed out after ${timeout/1000}s`)), timeout)
+      );
+
+      await Promise.race([batches[i].commit(), timeoutPromise]);
+      
+      if (batches.length > 1) {
+        console.log(`    ✅ [DB WRITE] Committed batch ${i + 1}/${batches.length}`);
+      }
+    } catch (err) {
+      console.error(`    ❌ [DB WRITE] Failed: ${err.message}`);
+      throw err; 
     }
   }
 
-  console.log(`    ✅ [DB WRITE] Successfully saved ${documents.length} docs to "${collectionPath}"`);
+  console.log(`    ✅ [DB WRITE] Done.`);
   return documents.length;
 }
 

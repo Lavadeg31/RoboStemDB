@@ -19,6 +19,18 @@ async function main() {
   const { db } = initializeFirebase();
   console.log('Firebase initialized');
 
+  // Test Database Connection immediately
+  try {
+    console.log('🔍 Testing database connection...');
+    await db.collection('sync').doc('heartbeat').set({ 
+      lastCheck: new Date().toISOString() 
+    }, { merge: true });
+    console.log('✅ Database connection successful');
+  } catch (e) {
+    console.error('❌ Database connection failed:', e.message);
+    process.exit(1);
+  }
+
   const targetSeasonId = getTargetSeasonId();
   if (!targetSeasonId) {
     console.error('TARGET_SEASON_ID not set. Please set it in environment variables.');
