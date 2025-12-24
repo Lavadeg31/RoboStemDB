@@ -14,6 +14,8 @@ export async function batchWriteToFirestore(collectionPath, documents, merge = t
   let currentBatch = db.batch();
   let count = 0;
 
+  console.log(`    💾 [DB WRITE] Initializing batch write for ${documents.length} docs to "${collectionPath}"...`);
+
   for (const doc of documents) {
     const { id, data } = doc;
     const docRef = db.collection(collectionPath).doc(id);
@@ -37,10 +39,14 @@ export async function batchWriteToFirestore(collectionPath, documents, merge = t
   }
 
   // Execute all batches
-  for (const batch of batches) {
-    await batch.commit();
+  for (let i = 0; i < batches.length; i++) {
+    await batches[i].commit();
+    if (batches.length > 1) {
+      console.log(`    ✅ [DB WRITE] Committed batch ${i + 1}/${batches.length}`);
+    }
   }
 
+  console.log(`    ✅ [DB WRITE] Successfully saved ${documents.length} docs to "${collectionPath}"`);
   return documents.length;
 }
 

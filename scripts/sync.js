@@ -40,37 +40,32 @@ async function main() {
       const event = events[i];
       const eventId = String(event.id || event.sku);
       
-      // SKIP LOGIC:
-      // 1. Check if event is in the past (ended more than 24 hours ago)
-      // 2. Check if event already exists in Firestore
-      const eventEndDate = event.end ? new Date(event.end) : null;
-      const isPastEvent = eventEndDate && (now.getTime() - eventEndDate.getTime() > 24 * 60 * 60 * 1000);
+      console.log(`\n[${i + 1}/${events.length}] Checking event ${eventId}: ${event.name || 'Unknown'}`);
 
+      // SKIP LOGIC:
       if (isPastEvent) {
         try {
+          console.log(`  🔍 Checking if event ${eventId} already exists...`);
           const doc = await db.collection('events').doc(eventId).get();
           if (doc.exists) {
-            // Check if this event was synced with the "old" 1-team-per-rank logic
-            // We check if division 1 has finalist rankings with old numeric IDs
+            console.log(`  🔍 Checking teamwork rankings for ${eventId}...`);
             const finCheck = await db.collection(`events/${eventId}/divisions/1/finalistRankings`).limit(1).get();
             const firstFin = finCheck.docs[0];
             
-            // If the ID is a simple number (like "1"), it's the old broken logic. 
-            // We should NOT skip so we can fix it.
             if (firstFin && !firstFin.id.startsWith('team_')) {
-              console.log(`\n  ♻️  Re-syncing event ${eventId} to fix incomplete teamwork rankings...`);
+              console.log(`  ♻️  Re-syncing event ${eventId} to fix incomplete teamwork rankings...`);
             } else {
-              process.stdout.write('.'); // Truly finished, safe to skip
+              process.stdout.write('.'); 
               if ((i + 1) % 50 === 0) console.log(` [${i + 1}/${events.length}]`); 
               continue;
             }
           }
         } catch (e) {
-          // If check fails, just proceed with sync to be safe
+          console.warn(`  ⚠️ Skip check failed for ${eventId}: ${e.message}`);
         }
       }
 
-      console.log(`\n[${i + 1}/${events.length}] Processing event ${eventId}: ${event.name || 'Unknown'}`);
+      console.log(`  🚀 Starting full sync for event ${eventId}...`);
 
       try {
         // 1. Store event metadata

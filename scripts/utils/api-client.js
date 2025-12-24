@@ -50,7 +50,7 @@ export async function apiGet(endpoint, params = {}) {
       // Detailed logging for API calls
       const url = new URL(endpoint);
       const paramsStr = Object.keys(params).length > 0 ? `?${new URLSearchParams(params).toString()}` : '';
-      console.log(`🌐 [API CALL] ${url.pathname}${paramsStr}`);
+      console.log(`    🌐 [API GET] ${url.pathname}${paramsStr}`);
 
       const response = await axios.get(endpoint, {
         headers: {
