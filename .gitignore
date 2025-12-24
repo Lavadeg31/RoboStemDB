@@ -4,4 +4,4 @@ node_modules/
 .DS_Store
 firebase-debug.log
 firestore-debug.log
-./INTEGRATION_GUIDE.md
+INTEGRATION_GUIDE.md
