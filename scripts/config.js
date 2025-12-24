@@ -1,6 +1,6 @@
 import admin from 'firebase-admin';
-import { getFirestore } from 'firebase-admin/firestore';
-import { getDatabase } from 'firebase-admin/database';
+import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
+import { getDatabase as getAdminDatabase } from 'firebase-admin/database';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -36,8 +36,8 @@ export function initializeFirebase() {
 
   // In firebase-admin v12, we use getFirestore and getDatabase
   // We explicitly target the 'default' database ID
-  db = getFirestore('default');
-  rtdb = getDatabase();
+  db = getAdminFirestore('default');
+  rtdb = getAdminDatabase();
   
   return { db, rtdb };
 }

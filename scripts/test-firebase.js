@@ -1,4 +1,5 @@
 import admin from 'firebase-admin';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -15,13 +16,13 @@ if (!admin.apps.length) {
   });
 }
 
-const db = admin.firestore();
+const db = getFirestore('default');
 
 async function test() {
   try {
     const res = await db.collection('test').add({
       message: 'Hello from sync script',
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      timestamp: FieldValue.serverTimestamp(),
     });
     console.log('Success! Document ID:', res.id);
   } catch (err) {

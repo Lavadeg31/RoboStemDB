@@ -1,4 +1,5 @@
 import admin from 'firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 import { getFirestore, getRealtimeDB } from '../config.js';
 
 /**
@@ -20,7 +21,7 @@ export async function batchWriteToFirestore(collectionPath, documents, merge = t
     
     currentBatch.set(docRef, {
       ...data,
-      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      lastUpdated: FieldValue.serverTimestamp(),
     }, { merge });
 
     count++;
@@ -57,7 +58,7 @@ export async function updateSyncProgress(progress) {
   const db = getFirestore();
   await db.collection('sync').doc('progress').set({
     ...progress,
-    lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+    lastUpdated: FieldValue.serverTimestamp(),
   }, { merge: true });
 }
 
