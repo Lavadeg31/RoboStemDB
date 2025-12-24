@@ -59,7 +59,10 @@ export function getRealtimeDB() {
 // RobotEvents API Configuration
 export function getApiKeys() {
   const keys = process.env.ROBOTEVENTS_API_KEYS || '';
-  return keys.split(',').map(k => k.trim()).filter(k => k.length > 0);
+  // Split by comma, trim whitespace, and also strip any single or double quotes
+  return keys.split(',')
+    .map(k => k.trim().replace(/^['"]|['"]$/g, ''))
+    .filter(k => k.length > 0);
 }
 
 export function getTargetSeasonId() {

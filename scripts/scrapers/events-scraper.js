@@ -8,13 +8,12 @@ import { fetchAllPages } from '../utils/pagination.js';
  */
 export async function scrapeEvents(seasonId) {
   const apiKeys = getApiKeys();
-  const apiKey = getNextApiKey(apiKeys);
-  
   const endpoint = `${ROBOTEVENTS_API_BASE}/seasons/${seasonId}/events`;
   
   const fetchPage = async (params) => {
     let retryCount = 0;
     while (true) {
+      const apiKey = getNextApiKey(apiKeys);
       try {
         const response = await axios.get(endpoint, {
           headers: {
@@ -25,6 +24,12 @@ export async function scrapeEvents(seasonId) {
         });
         return response;
       } catch (error) {
+        // If unauthorized, try the next key immediately
+        if (error.response?.status === 401 && apiKeys.length > 1) {
+          console.warn(`API Key failed (401). Trying next key...`);
+          continue; 
+        }
+
         const shouldRetry = await handleRateLimit(error, retryCount);
         if (shouldRetry) {
           retryCount++;
