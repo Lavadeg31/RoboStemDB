@@ -43,6 +43,9 @@ async function main() {
       console.log(`\n[${i + 1}/${events.length}] Checking event ${eventId}: ${event.name || 'Unknown'}`);
 
       // SKIP LOGIC:
+      const eventEndDate = event.end ? new Date(event.end) : null;
+      const isPastEvent = eventEndDate && (now.getTime() - eventEndDate.getTime() > 24 * 60 * 60 * 1000);
+
       if (isPastEvent) {
         try {
           console.log(`  🔍 Checking if event ${eventId} already exists...`);
