@@ -1,17 +1,18 @@
-name: DAILY Full Sync (Every 24h)
+name: LIVE Sync (Every 2m)
 
 on:
   workflow_dispatch:
   schedule:
-    # Run daily at 3 AM UTC
-    - cron: '0 3 * * *'
+    # Run every 2 minutes
+    - cron: '*/2 * * * *'
 
 jobs:
-  sync-full:
+  sync-live:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: write
+    # Prevent concurrent runs to avoid API rate limits
+    concurrency:
+      group: sync-live
+      cancel-in-progress: false
     
     steps:
       - name: Checkout repository
@@ -26,25 +27,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run FULL sync
+      - name: Run LIVE sync
         env:
           ROBOTEVENTS_API_KEYS: ${{ secrets.ROBOTEVENTS_API_KEYS }}
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
           FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
           FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
           TARGET_SEASON_ID: ${{ secrets.TARGET_SEASON_ID }}
-        run: node scripts/sync.js --full
-
-      - name: Notify on failure
-        if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: 'RobotEvents Sync Failed',
-              body: 'The RobotEvents sync workflow failed. Check the workflow logs for details.',
-              labels: ['bug', 'sync']
-            })
+        run: node scripts/sync.js --live
 

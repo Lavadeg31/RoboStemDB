@@ -1,17 +1,14 @@
-name: DAILY Full Sync (Every 24h)
+name: WEEKLY Master Team Sync
 
 on:
   workflow_dispatch:
   schedule:
-    # Run daily at 3 AM UTC
-    - cron: '0 3 * * *'
+    # Run every Sunday at 4 AM UTC
+    - cron: '0 4 * * 0'
 
 jobs:
-  sync-full:
+  sync-teams:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: write
     
     steps:
       - name: Checkout repository
@@ -26,14 +23,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run FULL sync
+      - name: Run Master Team List sync
         env:
-          ROBOTEVENTS_API_KEYS: ${{ secrets.ROBOTEVENTS_API_KEYS }}
+          TEAMLIST_TOKEN: ${{ secrets.TEAMLIST_TOKEN }}
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
           FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
           FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
-          TARGET_SEASON_ID: ${{ secrets.TARGET_SEASON_ID }}
-        run: node scripts/sync.js --full
+        run: npm run sync:teams
 
       - name: Notify on failure
         if: failure()
@@ -43,8 +39,8 @@ jobs:
             github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: 'RobotEvents Sync Failed',
-              body: 'The RobotEvents sync workflow failed. Check the workflow logs for details.',
+              title: 'Master Team List Sync Failed',
+              body: 'The weekly Master Team List sync from GitHub failed. Check logs.',
               labels: ['bug', 'sync']
             })
 

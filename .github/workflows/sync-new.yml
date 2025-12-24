@@ -1,13 +1,13 @@
-name: DAILY Full Sync (Every 24h)
+name: NEW Events Sync (Every 6h)
 
 on:
   workflow_dispatch:
   schedule:
-    # Run daily at 3 AM UTC
-    - cron: '0 3 * * *'
+    # Run every 6 hours (at 0, 6, 12, 18)
+    - cron: '0 */6 * * *'
 
 jobs:
-  sync-full:
+  sync-new:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -26,14 +26,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run FULL sync
+      - name: Run NEW events sync
         env:
           ROBOTEVENTS_API_KEYS: ${{ secrets.ROBOTEVENTS_API_KEYS }}
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
           FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
           FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
           TARGET_SEASON_ID: ${{ secrets.TARGET_SEASON_ID }}
-        run: node scripts/sync.js --full
+        run: node scripts/sync.js --new
 
       - name: Notify on failure
         if: failure()
@@ -43,8 +43,8 @@ jobs:
             github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: 'RobotEvents Sync Failed',
-              body: 'The RobotEvents sync workflow failed. Check the workflow logs for details.',
+              title: 'NEW Events Sync Failed',
+              body: 'The 6-hour "New Events" sync failed. Check logs.',
               labels: ['bug', 'sync']
             })
 

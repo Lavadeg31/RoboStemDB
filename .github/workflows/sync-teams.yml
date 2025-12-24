@@ -1,0 +1,32 @@
+name: WEEKLY Master Team Sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run every Sunday at 4 AM UTC
+    - cron: '0 4 * * 0'
+
+jobs:
+  sync-teams:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Master Team Sync
+        env:
+          TEAMLIST_TOKEN: ${{ secrets.TEAMLIST_TOKEN }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+        run: npm run sync:teams
+

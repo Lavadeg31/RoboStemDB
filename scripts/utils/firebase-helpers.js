@@ -1,5 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { getFirestore } from '../config.js';
+import { getFirestore, getRealtimeDB } from '../config.js';
 
 /**
  * Firebase write helpers
@@ -14,7 +14,7 @@ export async function batchWriteToFirestore(collectionPath, documents, merge = t
   let currentBatch = db.batch();
   let count = 0;
 
-  console.log(`    💾 [DB WRITE] Building batch for ${documents.length} docs...`);
+  console.log(`    💾 [FIRESTORE] Building batch for ${documents.length} docs to "${collectionPath}"...`);
 
   for (const doc of documents) {
     const { id, data } = doc;
@@ -38,30 +38,46 @@ export async function batchWriteToFirestore(collectionPath, documents, merge = t
     batches.push(currentBatch);
   }
 
-  console.log(`    💾 [DB WRITE] Executing commit for ${batches.length} batch(es)...`);
-
   // Execute all batches
   for (let i = 0; i < batches.length; i++) {
     try {
-      // 10 second timeout - let's fail fast if there's an issue
       const timeout = 10000;
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error(`Firestore commit timed out after ${timeout/1000}s`)), timeout)
       );
 
       await Promise.race([batches[i].commit(), timeoutPromise]);
-      
-      if (batches.length > 1) {
-        console.log(`    ✅ [DB WRITE] Committed batch ${i + 1}/${batches.length}`);
-      }
     } catch (err) {
-      console.error(`    ❌ [DB WRITE] Failed: ${err.message}`);
+      console.error(`    ❌ [FIRESTORE] Failed: ${err.message}`);
       throw err; 
     }
   }
 
-  console.log(`    ✅ [DB WRITE] Done.`);
+  console.log(`    ✅ [FIRESTORE] Done.`);
   return documents.length;
+}
+
+/**
+ * Updates Realtime Database for ultra-low latency live data
+ * Path is the RTDB path, documents is an array of {id, data}
+ */
+export async function updateRealtimeDB(path, documents) {
+  const rtdb = getRealtimeDB();
+  const updates = {};
+  
+  for (const doc of documents) {
+    updates[`${path}/${doc.id}`] = {
+      ...doc.data,
+      lastUpdated: new Date().toISOString()
+    };
+  }
+
+  try {
+    await rtdb.ref().update(updates);
+    console.log(`    ⚡ [RTDB] Updated ${documents.length} records at "${path}"`);
+  } catch (err) {
+    console.error(`    ❌ [RTDB] Failed: ${err.message}`);
+  }
 }
 
 export async function updateSyncProgress(progress) {
