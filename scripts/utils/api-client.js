@@ -56,8 +56,8 @@ export async function apiGet(endpoint, params = {}) {
         timeout: 30000, 
       });
       
-      // Success! Add a 500ms delay (much faster than 2s)
-      await sleep(750);
+      // Success! Add a 500ms delay (gentle but efficient)
+      await sleep(500);
       
       // Success! Reset retry count for this endpoint call
       retryCount = 0;

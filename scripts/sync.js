@@ -1,4 +1,4 @@
-import { initializeFirebase, getTargetSeasonId, getApiKeys } from './config.js';
+import { initializeFirebase, getTargetSeasonId, getApiKeys, getFirestore } from './config.js';
 import { scrapeEvents } from './scrapers/events-scraper.js';
 import { scrapeEventDetails, extractDivisions } from './scrapers/event-details-scraper.js';
 import { scrapeEventTeams } from './scrapers/event-teams-scraper.js';
@@ -6,7 +6,7 @@ import { scrapeEventMatches } from './scrapers/event-matches-scraper.js';
 import { scrapeEventRankings } from './scrapers/event-rankings-scraper.js';
 import { scrapeEventFinalistRankings } from './scrapers/event-finalist-rankings-scraper.js';
 import { scrapeEventSkills } from './scrapers/event-skills-scraper.js';
-import { batchWriteToFirestore, writeToRealtimeDB, updateSyncProgress, getSyncProgress } from './utils/firebase-helpers.js';
+import { batchWriteToFirestore, updateSyncProgress, getSyncProgress } from './utils/firebase-helpers.js';
 import { sleep } from './utils/rate-limiter.js';
 
 /**
@@ -16,13 +16,10 @@ async function main() {
   console.log('Starting RobotEvents Firebase Sync...');
   
   // Initialize Firebase
-  const { db, rtdb } = initializeFirebase();
+  const { db } = initializeFirebase();
   console.log('Firebase initialized');
 
-  // Check for existing progress
-  const progress = await getSyncProgress();
   const targetSeasonId = getTargetSeasonId();
-  
   if (!targetSeasonId) {
     console.error('TARGET_SEASON_ID not set. Please set it in environment variables.');
     process.exit(1);
@@ -31,166 +28,113 @@ async function main() {
   console.log(`Target season ID: ${targetSeasonId}`);
 
   try {
-    // Fetch events for the season
+    // Fetch all events for the season
     console.log(`Fetching events for season ${targetSeasonId}...`);
     const events = await scrapeEvents(targetSeasonId);
     console.log(`Found ${events.length} events`);
 
-    // Update progress
-    await updateSyncProgress({
-      currentSeason: targetSeasonId,
-      totalEvents: events.length,
-      eventsProcessed: 0,
-      startTime: new Date().toISOString(),
-    });
+    const now = new Date();
 
     // Process each event
     for (let i = 0; i < events.length; i++) {
       const event = events[i];
-      const eventId = event.id || event.sku;
+      const eventId = String(event.id || event.sku);
       
+      // SKIP LOGIC:
+      // 1. Check if event is in the past (ended more than 24 hours ago)
+      // 2. Check if event already exists in Firestore
+      const eventEndDate = event.end ? new Date(event.end) : null;
+      const isPastEvent = eventEndDate && (now.getTime() - eventEndDate.getTime() > 24 * 60 * 60 * 1000);
+
+      if (isPastEvent) {
+        const doc = await db.collection('events').doc(eventId).get();
+        if (doc.exists) {
+          console.log(`[${i + 1}/${events.length}] Skipping past event ${eventId} (already in DB)`);
+          continue;
+        }
+      }
+
       console.log(`\n[${i + 1}/${events.length}] Processing event ${eventId}: ${event.name || 'Unknown'}`);
 
       try {
-        // Store event in Firestore
-        await batchWriteToFirestore('events', [{
-          id: String(eventId),
-          data: event,
-        }]);
+        // 1. Store event metadata
+        await batchWriteToFirestore('events', [{ id: eventId, data: event }]);
 
-        // Store season-event reference
-        await batchWriteToFirestore(`seasons/${targetSeasonId}/events`, [{
-          id: String(eventId),
-          data: {
-            eventId: String(eventId),
-            seasonId: targetSeasonId,
-          },
-        }]);
-
-        // Fetch event details (includes divisions)
+        // 2. Fetch details to get divisions
         const eventDetails = await scrapeEventDetails(eventId);
         const divisions = extractDivisions(eventDetails);
 
-        // Store divisions
         if (divisions.length > 0) {
-          const divisionDocs = divisions.map(div => ({
-            id: String(div.id),
-            data: div,
-          }));
-          await batchWriteToFirestore(`events/${eventId}/divisions`, divisionDocs);
+          await batchWriteToFirestore(`events/${eventId}/divisions`, divisions.map(d => ({ id: String(d.id), data: d })));
         }
 
-        // Process each division
+        // 3. Process each division (Rankings & Matches)
         for (const division of divisions) {
-          const divisionId = division.id;
-          console.log(`  Processing division ${divisionId}: ${division.name}`);
+          const divId = division.id;
+          
+          // Rankings
+          const rankings = await scrapeEventRankings(eventId, divId);
+          if (rankings.length > 0) {
+            await batchWriteToFirestore(`events/${eventId}/divisions/${divId}/rankings`, rankings.map(r => ({
+              id: String(r.rank || `team_${r.team?.id}`),
+              data: r
+            })));
+          }
 
-          try {
-            // Fetch and store rankings
-            const rankings = await scrapeEventRankings(eventId, divisionId);
-            if (rankings.length > 0) {
-              const rankingDocs = rankings.map(rank => ({
-                id: String(rank.rank || rank.id || `rank_${rank.team?.id || rank.team}`),
-                data: rank,
-              }));
-              await batchWriteToFirestore(`events/${eventId}/divisions/${divisionId}/rankings`, rankingDocs);
-              
-              // Also store in Realtime DB for quick access
-              await writeToRealtimeDB(`events/${eventId}/divisions/${divisionId}/rankings`, {
-                data: rankings,
-              });
-            }
+          // Finalist Rankings
+          const finalists = await scrapeEventFinalistRankings(eventId, divId);
+          if (finalists.length > 0) {
+            await batchWriteToFirestore(`events/${eventId}/divisions/${divId}/finalistRankings`, finalists.map(f => ({
+              id: String(f.rank || `team_${f.team?.id}`),
+              data: f
+            })));
+          }
 
-            // Fetch and store finalist rankings
-            const finalistRankings = await scrapeEventFinalistRankings(eventId, divisionId);
-            if (finalistRankings.length > 0) {
-              const finalistDocs = finalistRankings.map(rank => ({
-                id: String(rank.rank || rank.id || `rank_${rank.team?.id || rank.team}`),
-                data: rank,
-              }));
-              await batchWriteToFirestore(`events/${eventId}/divisions/${divisionId}/finalistRankings`, finalistDocs);
-            }
-
-            // Fetch and store matches
-            const matches = await scrapeEventMatches(eventId, divisionId);
-            if (matches.length > 0) {
-              const matchDocs = matches.map(match => ({
-                id: String(match.id || match.matchnum || `match_${match.round}_${match.instance}`),
-                data: match,
-              }));
-              await batchWriteToFirestore(`events/${eventId}/divisions/${divisionId}/matches`, matchDocs);
-              
-              // Also store in Realtime DB for quick access
-              await writeToRealtimeDB(`events/${eventId}/divisions/${divisionId}/matches`, {
-                data: matches,
-              });
-            }
-          } catch (error) {
-            console.error(`  Error processing division ${divisionId}:`, error.message);
-            // Continue with next division
+          // Matches (includes scores/results)
+          const matches = await scrapeEventMatches(eventId, divId);
+          if (matches.length > 0) {
+            await batchWriteToFirestore(`events/${eventId}/divisions/${divId}/matches`, matches.map(m => ({
+              id: String(m.id || m.matchnum),
+              data: m
+            })));
           }
         }
 
-        // Fetch and store event teams
+        // 4. Teams at event
         const teams = await scrapeEventTeams(eventId);
         if (teams.length > 0) {
-          const teamDocs = teams.map(team => ({
-            id: String(team.id || team.number),
-            data: team,
-          }));
-          await batchWriteToFirestore(`events/${eventId}/teams`, teamDocs);
+          await batchWriteToFirestore(`events/${eventId}/teams`, teams.map(t => ({ id: String(t.id || t.number), data: t })));
         }
 
-        // Fetch and store event skills
+        // 5. Skills results
         const skills = await scrapeEventSkills(eventId);
         if (skills.length > 0) {
-          const skillDocs = skills.map(skill => ({
-            id: String(skill.id || `${skill.team?.id || skill.team}_${skill.type}`),
-            data: skill,
-          }));
-          await batchWriteToFirestore(`events/${eventId}/skills`, skillDocs);
-          
-          // Also store in Realtime DB
-          await writeToRealtimeDB(`events/${eventId}/skills`, {
-            data: skills,
-          });
+          await batchWriteToFirestore(`events/${eventId}/skills`, skills.map(s => ({
+            id: String(s.id || `${s.team?.id}_${s.type}`),
+            data: s
+          })));
         }
 
-        // Update progress
+        // Update progress in Firestore
         await updateSyncProgress({
           currentSeason: targetSeasonId,
-          totalEvents: events.length,
           eventsProcessed: i + 1,
-          currentEvent: eventId,
+          totalEvents: events.length,
+          lastProcessedEvent: eventId
         });
 
       } catch (error) {
         console.error(`Error processing event ${eventId}:`, error.message);
-        // Continue with next event
       }
     }
-
-    // Final progress update
-    await updateSyncProgress({
-      currentSeason: targetSeasonId,
-      totalEvents: events.length,
-      eventsProcessed: events.length,
-      completed: true,
-      endTime: new Date().toISOString(),
-    });
 
     console.log('\n✅ Sync completed successfully!');
   } catch (error) {
     console.error('❌ Sync failed:', error);
-    await updateSyncProgress({
-      error: error.message,
-      errorTime: new Date().toISOString(),
-    });
     process.exit(1);
   }
 }
 
-// Run the sync
 main().catch(error => {
   console.error('Fatal error:', error);
   process.exit(1);

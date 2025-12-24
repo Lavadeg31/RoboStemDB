@@ -1,6 +1,5 @@
-import admin from 'firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
-import { getFirestore, getRealtimeDB } from '../config.js';
+import { getFirestore } from '../config.js';
 
 /**
  * Firebase write helpers
@@ -43,15 +42,6 @@ export async function batchWriteToFirestore(collectionPath, documents, merge = t
   }
 
   return documents.length;
-}
-
-export async function writeToRealtimeDB(path, data) {
-  const rtdb = getRealtimeDB();
-  const ref = rtdb.ref(path);
-  await ref.set({
-    ...data,
-    lastUpdated: Date.now(),
-  });
 }
 
 export async function updateSyncProgress(progress) {

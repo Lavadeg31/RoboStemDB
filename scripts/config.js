@@ -1,13 +1,11 @@
 import admin from 'firebase-admin';
 import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
-import { getDatabase as getAdminDatabase } from 'firebase-admin/database';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 // Initialize Firebase Admin SDK
 let db;
-let rtdb;
 
 export function initializeFirebase() {
   if (admin.apps.length === 0) {
@@ -30,16 +28,14 @@ export function initializeFirebase() {
         privateKey: privateKey,
         clientEmail: clientEmail,
       }),
-      databaseURL: `https://${projectId}-default-rtdb.firebaseio.com`,
     });
   }
 
-  // In firebase-admin v12, we use getFirestore and getDatabase
+  // In firebase-admin v12, we use getFirestore
   // We explicitly target the 'default' database ID
   db = getAdminFirestore('default');
-  rtdb = getAdminDatabase();
   
-  return { db, rtdb };
+  return { db };
 }
 
 export function getFirestore() {
@@ -47,13 +43,6 @@ export function getFirestore() {
     initializeFirebase();
   }
   return db;
-}
-
-export function getRealtimeDB() {
-  if (!rtdb) {
-    initializeFirebase();
-  }
-  return rtdb;
 }
 
 // RobotEvents API Configuration
