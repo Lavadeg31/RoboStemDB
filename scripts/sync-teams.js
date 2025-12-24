@@ -57,6 +57,7 @@ async function main() {
     }
 
     console.log('✅ Master Team List sync completed successfully!');
+    process.exit(0);
   } catch (error) {
     console.error('❌ Sync failed:', error.message);
     if (error.response) {
