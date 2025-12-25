@@ -48,7 +48,7 @@ function deepEqual(obj1, obj2) {
   // Direct equality check
   if (obj1 === obj2) return true;
   
-  // Normalize null/undefined
+  // Normalize null/undefined (treat them as equal if both represent "no value")
   if ((obj1 === null || obj1 === undefined) && (obj2 === null || obj2 === undefined)) return true;
 
   // Handle Firestore Timestamp (has toDate)
@@ -71,11 +71,6 @@ function deepEqual(obj1, obj2) {
   // Objects
   const keys1 = Object.keys(obj1).sort();
   const keys2 = Object.keys(obj2).sort();
-  
-  // Check if keys are same (ignoring order in list but count must match)
-  // For strict object equality, keys length must match.
-  // Note: cleanForComparison handles missing keys by making them undefined (removed) or null
-  // But here we are comparing the "cleaned" objects.
   
   if (keys1.length !== keys2.length) return false;
   
