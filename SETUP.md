@@ -4,23 +4,7 @@
 
 ### 1. Extract API Keys
 
-The RobotEvents API keys are stored in:
-```
-/Users/larsini/Documents/RoboStem-Foundation/StatIQ/lib/constants/api_keys.dart
-```
-
-Extract the keys from the `robotEventsApiKeys` array and join them with commas for the `ROBOTEVENTS_API_KEYS` environment variable.
-
-Example:
-```dart
-static const List<String> robotEventsApiKeys = [
-  'key1',
-  'key2',
-  'key3',
-  // ... more keys
-];
-```
-
+get your api key from robotevents
 Convert to:
 ```env
 ROBOTEVENTS_API_KEYS=key1,key2,key3,...
@@ -29,7 +13,7 @@ ROBOTEVENTS_API_KEYS=key1,key2,key3,...
 ### 2. Get Firebase Service Account Credentials
 
 1. Go to [Firebase Console](https://console.firebase.google.com/)
-2. Select project: **robostemdb**
+2. Create project: **robostemdb**
 3. Go to Project Settings > Service Accounts
 4. Click "Generate New Private Key"
 5. Download the JSON file
