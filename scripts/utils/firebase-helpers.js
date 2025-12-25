@@ -9,11 +9,17 @@ import { getFirestore, getRealtimeDB } from '../config.js';
 const BATCH_SIZE = 500; // Firestore batch limit
 
 /**
- * Clean object for comparison (removes undefined)
+ * Clean object for comparison (removes undefined, sorts keys)
  */
 function cleanForComparison(obj) {
-  if (obj === undefined || obj === null) return obj;
-  return JSON.parse(JSON.stringify(obj));
+  if (obj === undefined || obj === null) return null; // Normalize null/undefined to null
+  const str = JSON.stringify(obj, (key, value) => {
+    // Treat undefined as null during stringify for consistent comparison if needed, 
+    // but JSON.stringify removes undefined by default.
+    // Explicitly normalizing undefined to null for keys that exist in one but not other
+    return value === undefined ? null : value;
+  });
+  return JSON.parse(str);
 }
 
 /**
@@ -21,8 +27,12 @@ function cleanForComparison(obj) {
  * Returns true if objects are effectively equal
  */
 function deepEqual(obj1, obj2) {
+  // Direct equality check
   if (obj1 === obj2) return true;
   
+  // Normalize null/undefined
+  if ((obj1 === null || obj1 === undefined) && (obj2 === null || obj2 === undefined)) return true;
+
   // Handle Firestore Timestamp (has toDate)
   if (obj1 && typeof obj1.toDate === 'function') obj1 = obj1.toDate();
   if (obj2 && typeof obj2.toDate === 'function') obj2 = obj2.toDate();
@@ -41,13 +51,20 @@ function deepEqual(obj1, obj2) {
   if (Array.isArray(obj1) !== Array.isArray(obj2)) return false;
   
   // Objects
-  const keys1 = Object.keys(obj1);
-  const keys2 = Object.keys(obj2);
+  const keys1 = Object.keys(obj1).sort();
+  const keys2 = Object.keys(obj2).sort();
+  
+  // Check if keys are same (ignoring order in list but count must match)
+  // For strict object equality, keys length must match.
+  // Note: cleanForComparison handles missing keys by making them undefined (removed) or null
+  // But here we are comparing the "cleaned" objects.
   
   if (keys1.length !== keys2.length) return false;
   
-  for (const key of keys1) {
-    if (!keys2.includes(key)) return false;
+  for (let i = 0; i < keys1.length; i++) {
+    const key = keys1[i];
+    if (key !== keys2[i]) return false; // Keys must match after sort
+    
     if (!deepEqual(obj1[key], obj2[key])) return false;
   }
   
@@ -167,10 +184,15 @@ export async function updateRealtimeDB(path, documents) {
           // Debugging why we are updating
           console.log(`    🔍 [RTDB Debug] Diff found for ${doc.id}:`);
           // Helper to find diff
-          const keys = new Set([...Object.keys(cleanExisting), ...Object.keys(cleanNew)]);
+          const keys = new Set([...Object.keys(cleanExisting || {}), ...Object.keys(cleanNew || {})]);
           for (const k of keys) {
-            if (JSON.stringify(cleanExisting[k]) !== JSON.stringify(cleanNew[k])) {
-              console.log(`      Key "${k}": Old=${JSON.stringify(cleanExisting[k])} vs New=${JSON.stringify(cleanNew[k])}`);
+            const val1 = cleanExisting ? cleanExisting[k] : undefined;
+            const val2 = cleanNew ? cleanNew[k] : undefined;
+            if (JSON.stringify(val1) !== JSON.stringify(val2)) {
+               // Only log if one isn't just null/undefined equivalent
+               if (!((val1 === null || val1 === undefined) && (val2 === null || val2 === undefined))) {
+                  console.log(`      Key "${k}": Old=${JSON.stringify(val1)} vs New=${JSON.stringify(val2)}`);
+               }
             }
           }
           debugLogPrinted = true;
