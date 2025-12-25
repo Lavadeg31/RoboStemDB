@@ -192,9 +192,10 @@ export async function updateRealtimeDB(path, documents) {
         // Strip lastUpdated for comparison
         const { lastUpdated, ...existingWithoutMeta } = existingDoc;
         
-        // Clean both sides to ensure consistent JSON types (no undefined, etc.)
-        const cleanExisting = cleanForComparison(existingWithoutMeta);
-        const cleanNew = cleanForComparison(doc.data);
+        // Use stripNulls for RTDB because RTDB deletes keys with null values
+        const cleanExisting = stripNulls(existingWithoutMeta);
+        // Also strip nulls from new data to simulate what would be stored
+        const cleanNew = stripNulls(doc.data);
 
         if (deepEqual(cleanExisting, cleanNew)) {
           shouldUpdate = false;
@@ -207,10 +208,7 @@ export async function updateRealtimeDB(path, documents) {
             const val1 = cleanExisting ? cleanExisting[k] : undefined;
             const val2 = cleanNew ? cleanNew[k] : undefined;
             if (JSON.stringify(val1) !== JSON.stringify(val2)) {
-               // Only log if one isn't just null/undefined equivalent
-               if (!((val1 === null || val1 === undefined) && (val2 === null || val2 === undefined))) {
-                  console.log(`      Key "${k}": Old=${JSON.stringify(val1)} vs New=${JSON.stringify(val2)}`);
-               }
+               console.log(`      Key "${k}": Old=${JSON.stringify(val1)} vs New=${JSON.stringify(val2)}`);
             }
           }
           debugLogPrinted = true;
