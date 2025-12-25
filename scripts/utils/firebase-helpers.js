@@ -129,17 +129,43 @@ export async function batchWriteToFirestore(collectionPath, documents, merge = t
 export async function updateRealtimeDB(path, documents) {
   const rtdb = getRealtimeDB();
   const updates = {};
+  let totalUpdates = 0;
   
-  for (const doc of documents) {
-    updates[`${path}/${doc.id}`] = {
-      ...doc.data,
-      lastUpdated: new Date().toISOString()
-    };
-  }
-
   try {
-    await rtdb.ref().update(updates);
-    console.log(`    ⚡ [RTDB] Updated ${documents.length} records at "${path}"`);
+    // 1. Fetch existing data for comparison (RTDB is fast, one-shot read is okay for reasonable sizes)
+    // Note: If 'path' contains many thousands of records, this might be heavy.
+    // However, live events usually have < 500 matches/rankings per division.
+    const snapshot = await rtdb.ref(path).once('value');
+    const existingData = snapshot.val() || {};
+
+    for (const doc of documents) {
+      const existingDoc = existingData[doc.id];
+      let shouldUpdate = true;
+
+      if (existingDoc) {
+        // Strip lastUpdated for comparison
+        const { lastUpdated, ...cleanExisting } = existingDoc;
+        if (deepEqual(cleanExisting, doc.data)) {
+          shouldUpdate = false;
+        }
+      }
+
+      if (shouldUpdate) {
+        updates[`${path}/${doc.id}`] = {
+          ...doc.data,
+          lastUpdated: new Date().toISOString()
+        };
+        totalUpdates++;
+      }
+    }
+
+    if (totalUpdates > 0) {
+      await rtdb.ref().update(updates);
+      console.log(`    ⚡ [RTDB] Updated ${totalUpdates} records at "${path}"`);
+    } else {
+      console.log(`    ⚡ [RTDB] No changes for "${path}"`);
+    }
+
   } catch (err) {
     console.error(`    ❌ [RTDB] Failed: ${err.message}`);
   }
