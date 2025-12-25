@@ -1,10 +1,22 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow read access to all authenticated users
+    // Public read access for all collections (StatIQ is a public app)
     match /{document=**} {
-      allow read: if request.auth != null;
-      allow write: if false; // Only allow writes from admin SDK
+      allow read: if true;
+    }
+    
+    // Allow client-side writes to master_teams for auto-update fallback
+    // This allows the app to write new teams discovered via API fallback
+    match /master_teams/{teamId} {
+      allow write: if request.resource.data.keys().hasAll(['id', 'number']) 
+                   && request.resource.data.id is int
+                   && request.resource.data.number is string;
+    }
+    
+    // All other writes are restricted (only via admin SDK)
+    match /{document=**} {
+      allow write: if false;
     }
   }
 }

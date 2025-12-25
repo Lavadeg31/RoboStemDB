@@ -1,18 +1,18 @@
-name: LIVE Sync (Every 2m)
+name: LIVE Sync (High Frequency)
 
 on:
   workflow_dispatch:
   schedule:
-    # Run every 2 minutes
-    - cron: '*/2 * * * *'
+    # Run every hour. The script itself will loop for 55 minutes.
+    # - cron: '0 * * * *'
 
 jobs:
   sync-live:
     runs-on: ubuntu-latest
-    # Prevent concurrent runs to avoid API rate limits
+    # CRITICAL: Prevent multiple loops from running at the same time
     concurrency:
       group: sync-live
-      cancel-in-progress: false
+      cancel-in-progress: true
     
     steps:
       - name: Checkout repository
@@ -27,12 +27,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run LIVE sync
+      - name: Run LIVE Loop
         env:
           ROBOTEVENTS_API_KEYS: ${{ secrets.ROBOTEVENTS_API_KEYS }}
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
           FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
           FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
           TARGET_SEASON_ID: ${{ secrets.TARGET_SEASON_ID }}
-        run: node scripts/sync.js --live
+        run: npm run sync:live
 

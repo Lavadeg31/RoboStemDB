@@ -6,9 +6,8 @@
   "type": "module",
   "scripts": {
     "sync": "node scripts/sync.js --full",
-    "sync:live": "node scripts/sync.js --live",
+    "sync:live": "node scripts/live-loop.js",
     "sync:new": "node scripts/sync.js --new",
-    "sync:teams": "node scripts/sync-teams.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
