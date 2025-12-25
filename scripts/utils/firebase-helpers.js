@@ -8,53 +8,118 @@ import { getFirestore, getRealtimeDB } from '../config.js';
 
 const BATCH_SIZE = 500; // Firestore batch limit
 
+/**
+ * Deep comparison helper
+ * Returns true if objects are effectively equal
+ */
+function deepEqual(obj1, obj2) {
+  if (obj1 === obj2) return true;
+  
+  // Handle Firestore Timestamp (has toDate)
+  if (obj1 && typeof obj1.toDate === 'function') obj1 = obj1.toDate();
+  if (obj2 && typeof obj2.toDate === 'function') obj2 = obj2.toDate();
+  
+  // Handle Date objects
+  if (obj1 instanceof Date && obj2 instanceof Date) {
+    return obj1.getTime() === obj2.getTime();
+  }
+  
+  // Primitives
+  if (typeof obj1 !== 'object' || obj1 === null || typeof obj2 !== 'object' || obj2 === null) {
+    return false;
+  }
+  
+  // Arrays
+  if (Array.isArray(obj1) !== Array.isArray(obj2)) return false;
+  
+  // Objects
+  const keys1 = Object.keys(obj1);
+  const keys2 = Object.keys(obj2);
+  
+  if (keys1.length !== keys2.length) return false;
+  
+  for (const key of keys1) {
+    if (!keys2.includes(key)) return false;
+    if (!deepEqual(obj1[key], obj2[key])) return false;
+  }
+  
+  return true;
+}
+
 export async function batchWriteToFirestore(collectionPath, documents, merge = true) {
   const db = getFirestore();
-  const batches = [];
-  let currentBatch = db.batch();
-  let count = 0;
+  let totalUpdated = 0;
+  let totalSkipped = 0;
 
-  console.log(`    💾 [FIRESTORE] Building batch for ${documents.length} docs to "${collectionPath}"...`);
+  console.log(`    💾 [FIRESTORE] Processing ${documents.length} docs for "${collectionPath}"...`);
 
-  for (const doc of documents) {
-    const { id, data } = doc;
-    const docRef = db.collection(collectionPath).doc(id);
+  // Process in chunks to respect batch limits and memory
+  for (let i = 0; i < documents.length; i += BATCH_SIZE) {
+    const chunk = documents.slice(i, i + BATCH_SIZE);
+    const docRefs = chunk.map(doc => db.collection(collectionPath).doc(doc.id));
     
-    currentBatch.set(docRef, {
-      ...data,
-      lastUpdated: FieldValue.serverTimestamp(),
-    }, { merge });
-
-    count++;
-
-    if (count >= BATCH_SIZE) {
-      batches.push(currentBatch);
-      currentBatch = db.batch();
-      count = 0;
-    }
-  }
-
-  if (count > 0) {
-    batches.push(currentBatch);
-  }
-
-  // Execute all batches
-  for (let i = 0; i < batches.length; i++) {
+    // 1. Fetch existing documents to compare
+    let snapshots = [];
     try {
-      const timeout = 10000;
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error(`Firestore commit timed out after ${timeout/1000}s`)), timeout)
-      );
-
-      await Promise.race([batches[i].commit(), timeoutPromise]);
+      if (docRefs.length > 0) {
+        // Use getAll for efficient read
+        snapshots = await db.getAll(...docRefs);
+      }
     } catch (err) {
-      console.error(`    ❌ [FIRESTORE] Failed: ${err.message}`);
-      throw err; 
+      console.warn(`    ⚠️ [FIRESTORE] Failed to fetch existing docs for comparison: ${err.message}. Proceeding with writes.`);
+      snapshots = new Array(chunk.length).fill({ exists: false });
     }
+
+    const batch = db.batch();
+    let batchCount = 0;
+
+    chunk.forEach((doc, index) => {
+      const { id, data } = doc;
+      const snapshot = snapshots[index];
+      let shouldWrite = true;
+
+      if (snapshot && snapshot.exists) {
+        const existingData = snapshot.data();
+        // Ignore lastUpdated for comparison as it changes on every write
+        if (existingData.lastUpdated) delete existingData.lastUpdated;
+        
+        // Compare with new data
+        if (deepEqual(existingData, data)) {
+          shouldWrite = false;
+        }
+      }
+
+      if (shouldWrite) {
+        const docRef = db.collection(collectionPath).doc(id);
+        batch.set(docRef, {
+          ...data,
+          lastUpdated: FieldValue.serverTimestamp(),
+        }, { merge });
+        batchCount++;
+      }
+    });
+
+    if (batchCount > 0) {
+      try {
+        const timeout = 10000;
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error(`Firestore commit timed out after ${timeout/1000}s`)), timeout)
+        );
+        await Promise.race([batch.commit(), timeoutPromise]);
+        totalUpdated += batchCount;
+      } catch (err) {
+        console.error(`    ❌ [FIRESTORE] Batch failed: ${err.message}`);
+        throw err;
+      }
+    }
+    totalSkipped += (chunk.length - batchCount);
   }
 
-  console.log(`    ✅ [FIRESTORE] Done.`);
-  return documents.length;
+  if (totalUpdated > 0 || totalSkipped > 0) {
+    console.log(`    Outcome: ${totalUpdated} updated, ${totalSkipped} unchanged.`);
+  }
+
+  return totalUpdated;
 }
 
 /**
@@ -93,4 +158,3 @@ export async function getSyncProgress() {
   const doc = await db.collection('sync').doc('progress').get();
   return doc.exists ? doc.data() : null;
 }
-
