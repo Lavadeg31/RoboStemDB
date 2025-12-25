@@ -9,6 +9,14 @@ import { getFirestore, getRealtimeDB } from '../config.js';
 const BATCH_SIZE = 500; // Firestore batch limit
 
 /**
+ * Clean object for comparison (removes undefined)
+ */
+function cleanForComparison(obj) {
+  if (obj === undefined || obj === null) return obj;
+  return JSON.parse(JSON.stringify(obj));
+}
+
+/**
  * Deep comparison helper
  * Returns true if objects are effectively equal
  */
@@ -80,11 +88,14 @@ export async function batchWriteToFirestore(collectionPath, documents, merge = t
 
       if (snapshot && snapshot.exists) {
         const existingData = snapshot.data();
-        // Ignore lastUpdated for comparison as it changes on every write
         if (existingData.lastUpdated) delete existingData.lastUpdated;
         
+        // Clean data for comparison (handle undefined vs missing keys)
+        const cleanExisting = cleanForComparison(existingData);
+        const cleanNew = cleanForComparison(data);
+
         // Compare with new data
-        if (deepEqual(existingData, data)) {
+        if (deepEqual(cleanExisting, cleanNew)) {
           shouldWrite = false;
         }
       }
@@ -132,11 +143,11 @@ export async function updateRealtimeDB(path, documents) {
   let totalUpdates = 0;
   
   try {
-    // 1. Fetch existing data for comparison (RTDB is fast, one-shot read is okay for reasonable sizes)
-    // Note: If 'path' contains many thousands of records, this might be heavy.
-    // However, live events usually have < 500 matches/rankings per division.
     const snapshot = await rtdb.ref(path).once('value');
     const existingData = snapshot.val() || {};
+
+    // DEBUG: Only log details for the first mismatch found
+    let debugLogPrinted = false;
 
     for (const doc of documents) {
       const existingDoc = existingData[doc.id];
@@ -144,9 +155,25 @@ export async function updateRealtimeDB(path, documents) {
 
       if (existingDoc) {
         // Strip lastUpdated for comparison
-        const { lastUpdated, ...cleanExisting } = existingDoc;
-        if (deepEqual(cleanExisting, doc.data)) {
+        const { lastUpdated, ...existingWithoutMeta } = existingDoc;
+        
+        // Clean both sides to ensure consistent JSON types (no undefined, etc.)
+        const cleanExisting = cleanForComparison(existingWithoutMeta);
+        const cleanNew = cleanForComparison(doc.data);
+
+        if (deepEqual(cleanExisting, cleanNew)) {
           shouldUpdate = false;
+        } else if (!debugLogPrinted) {
+          // Debugging why we are updating
+          console.log(`    🔍 [RTDB Debug] Diff found for ${doc.id}:`);
+          // Helper to find diff
+          const keys = new Set([...Object.keys(cleanExisting), ...Object.keys(cleanNew)]);
+          for (const k of keys) {
+            if (JSON.stringify(cleanExisting[k]) !== JSON.stringify(cleanNew[k])) {
+              console.log(`      Key "${k}": Old=${JSON.stringify(cleanExisting[k])} vs New=${JSON.stringify(cleanNew[k])}`);
+            }
+          }
+          debugLogPrinted = true;
         }
       }
 
