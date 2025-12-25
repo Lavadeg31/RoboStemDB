@@ -10,16 +10,34 @@ const BATCH_SIZE = 500; // Firestore batch limit
 
 /**
  * Clean object for comparison (removes undefined, sorts keys)
+ * Preserves nulls to match Firestore behavior (if needed) but JSON.stringify handles them.
  */
 function cleanForComparison(obj) {
-  if (obj === undefined || obj === null) return null; // Normalize null/undefined to null
+  if (obj === undefined || obj === null) return null;
   const str = JSON.stringify(obj, (key, value) => {
-    // Treat undefined as null during stringify for consistent comparison if needed, 
-    // but JSON.stringify removes undefined by default.
-    // Explicitly normalizing undefined to null for keys that exist in one but not other
     return value === undefined ? null : value;
   });
   return JSON.parse(str);
+}
+
+/**
+ * Recursively remove keys with null values from an object.
+ * This mimics RTDB behavior where null values mean "delete key".
+ */
+function stripNulls(obj) {
+  if (Array.isArray(obj)) {
+    return obj.map(v => stripNulls(v));
+  } else if (obj !== null && typeof obj === 'object') {
+    return Object.keys(obj).reduce((acc, key) => {
+      const val = stripNulls(obj[key]);
+      // If value is null, skip adding it to the accumulator (effectively deleting the key)
+      if (val !== null && val !== undefined) {
+        acc[key] = val;
+      }
+      return acc;
+    }, {});
+  }
+  return obj;
 }
 
 /**
