@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { sync } from './sync.js';
 
 const LOOP_DURATION_MINS = 55; // Run for 55 minutes then stop (to let the next GH Action take over)
 const INTERVAL_MS = 120000; // 2 minutes
@@ -6,6 +6,10 @@ const INTERVAL_MS = 120000; // 2 minutes
 async function runLoop() {
   const startTime = Date.now();
   const endTime = startTime + (LOOP_DURATION_MINS * 60 * 1000);
+  
+  // This cache stays in memory for the full 55 minutes.
+  // It prevents the script from pushing data to RTDB unless it actually changed.
+  const sessionCache = {};
 
   console.log(`🚀 Starting Live Sync Loop for ${LOOP_DURATION_MINS} minutes...`);
 
@@ -14,8 +18,13 @@ async function runLoop() {
     
     try {
       console.log(`\n--- Cycle Start: ${new Date().toISOString()} ---`);
-      // Execute the sync script with the --live flag
-      execSync('node scripts/sync.js --live', { stdio: 'inherit' });
+      
+      // Call the sync function directly with our cache
+      await sync({
+        mode: 'live',
+        cache: sessionCache
+      });
+      
       console.log(`--- Cycle Complete ---`);
     } catch (error) {
       console.error('❌ Cycle failed:', error.message);
@@ -34,7 +43,7 @@ async function runLoop() {
   process.exit(0);
 }
 
-runLoop();
-
-
-
+runLoop().catch(err => {
+  console.error('Fatal loop error:', err);
+  process.exit(1);
+});
