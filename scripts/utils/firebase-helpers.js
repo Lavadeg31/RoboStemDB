@@ -84,7 +84,14 @@ function deepEqual(obj1, obj2) {
   return true;
 }
 
-export async function batchWriteToFirestore(collectionPath, documents, merge = true) {
+/**
+ * Writes to Firestore with read-before-write optimization
+ * @param {string} collectionPath - Firestore collection path
+ * @param {Array} documents - Array of {id, data} objects
+ * @param {boolean} merge - Whether to merge documents
+ * @param {boolean} checkBeforeWrite - Whether to read existing docs to compare before writing (costs reads to save writes)
+ */
+export async function batchWriteToFirestore(collectionPath, documents, merge = true, checkBeforeWrite = true) {
   const db = getFirestore();
   let totalUpdated = 0;
   let totalSkipped = 0;
@@ -94,18 +101,23 @@ export async function batchWriteToFirestore(collectionPath, documents, merge = t
   // Process in chunks to respect batch limits and memory
   for (let i = 0; i < documents.length; i += BATCH_SIZE) {
     const chunk = documents.slice(i, i + BATCH_SIZE);
-    const docRefs = chunk.map(doc => db.collection(collectionPath).doc(doc.id));
     
-    // 1. Fetch existing documents to compare
+    // 1. Fetch existing documents to compare (ONLY IF checkBeforeWrite is true)
     let snapshots = [];
-    try {
-      if (docRefs.length > 0) {
-        // Use getAll for efficient read
-        snapshots = await db.getAll(...docRefs);
+    if (checkBeforeWrite) {
+      const docRefs = chunk.map(doc => db.collection(collectionPath).doc(doc.id));
+      try {
+        if (docRefs.length > 0) {
+          // Use getAll for efficient read
+          snapshots = await db.getAll(...docRefs);
+        }
+      } catch (err) {
+        console.warn(`    ⚠️ [FIRESTORE] Failed to fetch existing docs for comparison: ${err.message}. Proceeding with writes.`);
+        snapshots = new Array(chunk.length).fill({ exists: false });
       }
-    } catch (err) {
-      console.warn(`    ⚠️ [FIRESTORE] Failed to fetch existing docs for comparison: ${err.message}. Proceeding with writes.`);
-      snapshots = new Array(chunk.length).fill({ exists: false });
+    } else {
+      // If skipping checks, act as if no docs exist so we always write
+      // Actually, we don't need snapshots array if we just force write
     }
 
     const batch = db.batch();
@@ -113,20 +125,22 @@ export async function batchWriteToFirestore(collectionPath, documents, merge = t
 
     chunk.forEach((doc, index) => {
       const { id, data } = doc;
-      const snapshot = snapshots[index];
       let shouldWrite = true;
 
-      if (snapshot && snapshot.exists) {
-        const existingData = snapshot.data();
-        if (existingData.lastUpdated) delete existingData.lastUpdated;
-        
-        // Clean data for comparison (handle undefined vs missing keys)
-        const cleanExisting = cleanForComparison(existingData);
-        const cleanNew = cleanForComparison(data);
+      if (checkBeforeWrite) {
+        const snapshot = snapshots[index];
+        if (snapshot && snapshot.exists) {
+          const existingData = snapshot.data();
+          if (existingData.lastUpdated) delete existingData.lastUpdated;
+          
+          // Clean data for comparison (handle undefined vs missing keys)
+          const cleanExisting = cleanForComparison(existingData);
+          const cleanNew = cleanForComparison(data);
 
-        // Compare with new data
-        if (deepEqual(cleanExisting, cleanNew)) {
-          shouldWrite = false;
+          // Compare with new data
+          if (deepEqual(cleanExisting, cleanNew)) {
+            shouldWrite = false;
+          }
         }
       }
 

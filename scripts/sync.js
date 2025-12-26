@@ -85,6 +85,14 @@ async function main() {
                 if ((i + 1) % 50 === 0) console.log(` [${i + 1}/${events.length}]`); 
                 continue;
               }
+
+              // Fallback: Check matches if finalist rankings are missing (common for scrimmages/leagues)
+              const matchCheck = await db.collection(`events/${eventId}/divisions/1/matches`).limit(1).get();
+              if (!matchCheck.empty) {
+                process.stdout.write('.'); 
+                if ((i + 1) % 50 === 0) console.log(` [${i + 1}/${events.length}]`); 
+                continue;
+              }
             }
           }
         } catch (e) {
@@ -119,7 +127,11 @@ async function main() {
           const rankings = await scrapeEventRankings(eventId, divId);
           if (rankings.length > 0) {
             const rankingDocs = rankings.map(r => ({ id: String(r.id || `team_${r.team?.id || r.team}`), data: r }));
-            await batchWriteToFirestore(`events/${eventId}/divisions/${divId}/rankings`, rankingDocs);
+            
+            // Only update Firestore in non-live modes (to save costs)
+            if (mode !== 'live') {
+              await batchWriteToFirestore(`events/${eventId}/divisions/${divId}/rankings`, rankingDocs);
+            }
             
             // IF LIVE: Also push to Realtime DB for low latency
             if (mode === 'live') {
@@ -144,7 +156,11 @@ async function main() {
           const matches = await scrapeEventMatches(eventId, divId);
           if (matches.length > 0) {
             const matchDocs = matches.map(m => ({ id: String(m.id || m.matchnum), data: m }));
-            await batchWriteToFirestore(`events/${eventId}/divisions/${divId}/matches`, matchDocs);
+            
+            // Only update Firestore in non-live modes (to save costs)
+            if (mode !== 'live') {
+              await batchWriteToFirestore(`events/${eventId}/divisions/${divId}/matches`, matchDocs);
+            }
 
             // IF LIVE: Also push to Realtime DB for low latency
             if (mode === 'live') {
@@ -197,4 +213,3 @@ main().catch(error => {
   console.error('Fatal error:', error);
   process.exit(1);
 });
-
