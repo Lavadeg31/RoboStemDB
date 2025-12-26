@@ -3,7 +3,7 @@ name: NEW Events Sync (Every 6h)
 on:
   workflow_dispatch:
   schedule:
-    # Run every 6 hours (at 0, 6, 12, 18)
+    # adjust the /12 to make it run every 6h etc
     - cron: '0 */12 * * *'
 
 jobs:
